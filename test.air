@@ -1,3 +1,2 @@
-int i =    1;
-print(i); 
-print("goodbye");
+string i = "str";
+print(i);
