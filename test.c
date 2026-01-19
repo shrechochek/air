@@ -15,17 +15,20 @@ bool is_print(char *token) {
     return !result;
 }
 
-void trim_left(char *str) {
-    char *dst = str;
+char* skip_whitespace(char *str) {
     while (*str == ' ' || *str == '\n' || *str == '\t' || *str == '\r') {
         str++;
     }
-    if (dst != str) {
-        while (*str) {
-            *dst++ = *str++;
-        }
-        *dst = '\0';
+    return str;
+}
+
+int skip_to_bracket(char *str) {
+    int index = 0;
+    while (*str != ')') { //add length check
+        index ++;
+        str ++;
     }
+    return index;
 }
 
 int main(void) {
@@ -58,13 +61,14 @@ int main(void) {
     
     // printf("%c\n", token[0]);
     while (token != NULL) {
-        trim_left(token); // clean all spaces and /n
+        token = skip_whitespace(token); // clean all spaces and /n
         if(is_print(token)) {
-            // printf("YES\n");
-            char *print_token = token + 7;
+            char *print_token = token + 6;
+            index = skip_to_bracket(token);
+            token[index] = '\0';
             printf("%s\n", print_token);
         } else {
-            printf("NO\n");
+            // printf("NO\n");
         }
         token = strtok(NULL, ";");
     }
