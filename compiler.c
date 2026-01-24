@@ -129,11 +129,18 @@ bool is_valid_int(const char *str, int *out_value) {
     if (*endptr != '\0' && !isspace((unsigned char)*endptr)) {
         return false;
     }
-    // if (val < INT_MIN || val > INT_MAX) {
-    //     return false; // переполнение
-    // }
     
     if (out_value) *out_value = (int)val;
+    return true;
+}
+
+bool is_valid_var_name(const char *str) { //check for spaces in var name and \n
+    while (*str) {
+        if (isspace((unsigned char)*str) || *str == '\n') {
+            return false;
+        }
+        str++;
+    }
     return true;
 }
 
@@ -209,6 +216,12 @@ int main(void) {
             }
             *eq = '\0';
             remove_end(name_start);
+
+            if(!is_valid_var_name(name_start)) {
+                perror("vars mustn't have spaces in their names");
+                return 1;
+            }
+
             char *value_start = skip_whitespace(eq + 1);
 
             int value = atoi(value_start);
@@ -235,6 +248,12 @@ int main(void) {
 
             *eq = '\0';
             remove_end(name_start);
+
+            if(!is_valid_var_name(name_start)) {
+                perror("vars mustn't have spaces in their names");
+                return 1;
+            }
+
             char *value_start = skip_whitespace(eq + 1);
 
             // обрезаем кавычки
