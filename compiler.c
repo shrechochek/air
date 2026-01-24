@@ -189,7 +189,8 @@ int main(void) {
                         printf("%s\n", vars[idx].svalue);
                     }
                 } else {
-                    fprintf(stderr, "Unknown variable: %s\n", print_token);
+                    perror("Unknown variable");
+                    return 1;
                 }
             }
         } else if (strncmp(token, "int", 3) == 0 && isspace((unsigned char)token[3])) { // if int var
@@ -219,10 +220,10 @@ int main(void) {
             }
 
             if (!set_var_int(name_start, value)) {
-                fprintf(stderr, "Variable storage full\n");
+                perror("Variable storage full");
+                return 1;
             }
-        } else if (strncmp(token, "string", 3) == 0 && isspace((unsigned char)token[6])) { // if string var
-            // string myStr = "hello";
+        } else if (strncmp(token, "string", 6) == 0 && isspace((unsigned char)token[6])) { // if string var
             char *name_start = skip_whitespace(token + 6);
             char *eq = strchr(name_start, '=');
 
@@ -241,12 +242,15 @@ int main(void) {
                 char *end_quote = strrchr(value_start + 1, '"');
                 if (end_quote) *end_quote = '\0';
                 value_start++; // теперь указывает на первый символ внутри кавычек
+            } else {
+                perror("string must start with double quotes");
+                return 1;
             }
 
             set_var_string(name_start, value_start);
         } 
         else {
-            // add new event?
+
         }
         token = strtok(NULL, ";");
     }
