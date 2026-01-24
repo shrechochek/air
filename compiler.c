@@ -120,6 +120,23 @@ bool get_var(const char *name, int *out) {
     return true;
 }
 
+bool is_valid_int(const char *str, int *out_value) {
+    if (!str || !*str) return false;
+    
+    char *endptr;
+    long val = strtol(str, &endptr, 10);
+    
+    if (*endptr != '\0' && !isspace((unsigned char)*endptr)) {
+        return false;
+    }
+    // if (val < INT_MIN || val > INT_MAX) {
+    //     return false; // переполнение
+    // }
+    
+    if (out_value) *out_value = (int)val;
+    return true;
+}
+
 int main(void) {
     FILE *file = fopen("test.air", "r");
     if (!file) {
@@ -192,7 +209,15 @@ int main(void) {
             *eq = '\0';
             remove_end(name_start);
             char *value_start = skip_whitespace(eq + 1);
+
             int value = atoi(value_start);
+
+
+            if (!is_valid_int(value_start, &value)) {
+                perror("invalid integer value");
+                return 1;
+            }
+
             if (!set_var_int(name_start, value)) {
                 fprintf(stderr, "Variable storage full\n");
             }
