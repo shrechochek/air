@@ -240,8 +240,13 @@ int main(void) {
             // обрезаем кавычки
             if (*value_start == '"') {
                 char *end_quote = strrchr(value_start + 1, '"');
-                if (end_quote) *end_quote = '\0';
-                value_start++; // теперь указывает на первый символ внутри кавычек
+                if (end_quote) {
+                    *end_quote = '\0';
+                } else {
+                    perror("variables names must end with double quotes");
+                    return 1;
+                }
+                value_start++; // point on first symbol inside double quotes
             } else {
                 perror("string must start with double quotes");
                 return 1;
