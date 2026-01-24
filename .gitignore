@@ -1,6 +1,7 @@
 # bin
 *.exe
 *.app
+*.o
 
 #macos
 *.DS_Store
