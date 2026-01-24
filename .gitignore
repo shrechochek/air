@@ -2,6 +2,7 @@
 *.exe
 *.app
 *.o
+*.obj
 
 #macos
 *.DS_Store
@@ -15,3 +16,5 @@
 
 # test file
 test.air
+
+#bin file
