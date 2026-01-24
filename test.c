@@ -46,6 +46,24 @@ void remove_end(char *str) {
     }
 }
 
+void remove_comments(char *buffer) {
+    char *p = buffer;
+    bool in_string = false;
+
+    while (*p) {
+        if (*p == '"' && (p == buffer || *(p-1) != '\\')) {
+            in_string = !in_string;
+        } else if (!in_string && *p == '/' && *(p+1) == '/') {
+            char *start = p;
+            while (*p && *p != '\n') {
+                *p++ = ' ';
+            }
+            continue;
+        }
+        p++;
+    }
+}
+
 int find_var(const char *name) {
     for (int i = 0; i < MAX_VARS; i++) {
         if (strcmp(vars[i].name, name) == 0) {
@@ -125,6 +143,8 @@ int main(void) {
     buffer[size] = '\0';
     fclose(file);
 
+    remove_comments(buffer); // remove comments
+
     // Разбиение по ;
     char *token = strtok(buffer, ";");
 
@@ -140,7 +160,6 @@ int main(void) {
             remove_end(print_token);
 
             if (*print_token == '"') { //if string
-                // string literal: print without surrounding quotes
                 char *end_quote = strrchr(print_token + 1, '"'); //find string end
                 if (end_quote) *end_quote = '\0';
                 printf("%s\n", print_token + 1);
@@ -159,6 +178,13 @@ int main(void) {
         } else if (strncmp(token, "int", 3) == 0 && isspace((unsigned char)token[3])) { // if int var
             char *name_start = skip_whitespace(token + 3);
             char *eq = strchr(name_start, '=');
+
+            // if first char is digit
+            if (isdigit(name_start[0])) {
+                perror("first char cannot be int");
+                return 1;
+            }
+
             if (!eq) {
                 token = strtok(NULL, ";");
                 continue;
@@ -174,6 +200,13 @@ int main(void) {
             // string myStr = "hello";
             char *name_start = skip_whitespace(token + 6);
             char *eq = strchr(name_start, '=');
+
+            // if first char is digit
+            if (isdigit(name_start[0])) {
+                perror("first char cannot be int");
+                return 1;
+            }
+
             *eq = '\0';
             remove_end(name_start);
             char *value_start = skip_whitespace(eq + 1);

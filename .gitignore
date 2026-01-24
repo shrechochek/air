@@ -11,3 +11,6 @@
 
 #C
 *.dsym
+
+# test file
+test.air
