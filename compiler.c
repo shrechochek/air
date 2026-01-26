@@ -5,7 +5,7 @@
 #include <ctype.h>
 
 // Variable types
-typedef enum { VAR_INT, VAR_STRING, VAR_BOOL } VarType;
+typedef enum { VAR_INT, VAR_STRING, VAR_BOOL, VAR_FLOAT } VarType;
 
 // Dynamic variable structure
 typedef struct {
@@ -14,6 +14,7 @@ typedef struct {
     int ivalue;
     char *svalue;
     bool bvalue;
+    float fvalue;
 } Variable;
 
 // Global state for dynamic storage
@@ -111,6 +112,7 @@ void execute_statement(char *stmt) {
                         if (vars[i].type == VAR_INT) printf("%d\n", vars[i].ivalue);
                         else if (vars[i].type == VAR_STRING) printf("%s\n", vars[i].svalue);
                         else if (vars[i].type == VAR_BOOL) printf("%s\n", vars[i].bvalue ? "true" : "false");
+                        else if (vars[i].type == VAR_FLOAT) printf("%f\n", vars[i].fvalue);
                         found = true;
                         break;
                     }
@@ -128,6 +130,7 @@ void execute_statement(char *stmt) {
     if (strncmp(stmt, "int ", 4) == 0) { type = VAR_INT; name_start = stmt + 4; }
     else if (strncmp(stmt, "string ", 7) == 0) { type = VAR_STRING; name_start = stmt + 7; }
     else if (strncmp(stmt, "bool ", 5) == 0) { type = VAR_BOOL; name_start = stmt + 5; }
+    else if (strncmp(stmt, "float ", 6) == 0) { type = VAR_FLOAT; name_start = stmt + 6; }
     else return;
 
     char *eq = strchr(name_start, '=');
@@ -161,6 +164,8 @@ void execute_statement(char *stmt) {
         if (strncmp(val_str, "true", 4) == 0) v->bvalue = true;
         else if (strncmp(val_str, "false", 5) == 0) v->bvalue = false;
         else fprintf(stderr, "Warning: Invalid bool value '%s'\n", val_str);
+    } else if (type == VAR_FLOAT) {
+        v->fvalue = (float)atof(val_str);
     }
 }
 
