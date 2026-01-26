@@ -4,281 +4,191 @@
 #include <stdbool.h>
 #include <ctype.h>
 
+// Variable types
+typedef enum { VAR_INT, VAR_STRING, VAR_BOOL } VarType;
 
-bool is_print(char *token) {
-    char token_cut[7];
+// Dynamic variable structure
+typedef struct {
+    char *name;
+    VarType type;
+    int ivalue;
+    char *svalue;
+    bool bvalue;
+} Variable;
 
-    strncpy(token_cut, token, 6);
-    token_cut[6] = '\0';
+// Global state for dynamic storage
+Variable *vars = NULL;
+size_t var_count = 0;
+size_t var_capacity = 0;
 
-    bool result = strcmp(token_cut,"print(");
-    
-    return !result;
-}
-
+// Function to skip all types of whitespace
 char* skip_whitespace(char *str) {
-    while (*str == ' ' || *str == '\n' || *str == '\t' || *str == '\r') {
-        str++;
-    }
+    while (*str && isspace((unsigned char)*str)) str++;
     return str;
 }
 
-#define MAX_VARS 100
-#define VAR_NAME_LEN 63
+// Memory management: find or create a variable
+Variable* get_or_create_var(const char *name) {
+    for (size_t i = 0; i < var_count; i++) {
+        if (strcmp(vars[i].name, name) == 0) return &vars[i];
+    }
 
-typedef enum { VAR_INT, VAR_STRING } VarType; //var types
+    // Expand capacity if needed (Dynamic Array)
+    if (var_count >= var_capacity) {
+        var_capacity = (var_capacity == 0) ? 10 : var_capacity * 2;
+        vars = realloc(vars, sizeof(Variable) * var_capacity);
+    }
 
-typedef struct {
-    char name[VAR_NAME_LEN + 1];
-    VarType type;
-    int ivalue;
-    char svalue[256];
-    bool in_use;
-} Variable;
+    vars[var_count].name = strdup(name);
+    vars[var_count].svalue = NULL;
+    vars[var_count].type = VAR_INT; // default
+    return &vars[var_count++];
+}
 
-static Variable vars[MAX_VARS];
+// Clean up memory at the end
+void free_all() {
+    for (size_t i = 0; i < var_count; i++) {
+        free(vars[i].name);
+        if (vars[i].svalue) free(vars[i].svalue);
+    }
+    free(vars);
+}
 
-void remove_end(char *str) {
-    if (!str || !*str) return;
-    char *end = str + strlen(str) - 1;
-    while (end >= str && isspace((unsigned char)*end)) {
-        *end-- = '\0';
+// Correctly remove comments without breaking strings
+void remove_comments(char *buffer) {
+    bool in_string = false;
+    for (char *p = buffer; *p; p++) {
+        if (*p == '"' && (p == buffer || *(p - 1) != '\\')) in_string = !in_string;
+        if (!in_string && *p == '/' && *(p + 1) == '/') {
+            while (*p && *p != '\n') *p++ = ' ';
+        }
     }
 }
 
-void remove_comments(char *buffer) {
-    char *p = buffer;
+// Advanced parser: finds the next ';' but respects double quotes
+char* get_next_statement(char **cursor) {
+    char *start = *cursor;
+    char *p = start;
     bool in_string = false;
 
     while (*p) {
-        if (*p == '"' && (p == buffer || *(p-1) != '\\')) {
-            in_string = !in_string;
-        } else if (!in_string && *p == '/' && *(p+1) == '/') {
-            char *start = p;
-            while (*p && *p != '\n') {
-                *p++ = ' ';
-            }
-            continue;
+        if (*p == '"' && (p == start || *(p - 1) != '\\')) in_string = !in_string;
+        if (*p == ';' && !in_string) {
+            *p = '\0';
+            *cursor = p + 1;
+            return start;
         }
         p++;
     }
+    *cursor = p;
+    return (p == start) ? NULL : start;
 }
 
-int find_var(const char *name) {
-    for (int i = 0; i < MAX_VARS; i++) {
-        if (strcmp(vars[i].name, name) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
+void execute_statement(char *stmt) {
+    stmt = skip_whitespace(stmt);
+    if (!*stmt) return;
 
-bool set_var_int(const char *name, int value) {
-    int idx = find_var(name);
-    if (idx >= 0) {
-        vars[idx].type = VAR_INT;
-        vars[idx].ivalue = value;
-        return true;
-    }
-    for (int i = 0; i < MAX_VARS; i++) {
-        if (!vars[i].in_use) {
-            vars[i].in_use = true;
-            strncpy(vars[i].name, name, VAR_NAME_LEN);
-            vars[i].name[VAR_NAME_LEN] = '\0';
-            vars[i].type = VAR_INT;
-            vars[i].ivalue = value;
-            return true;
-        }
-    }
-    return false;
-}
+    // --- Handling PRINT ---
+    if (strncmp(stmt, "print", 5) == 0) {
+        char *open_paren = strchr(stmt, '(');
+        char *close_paren = strrchr(stmt, ')');
+        if (open_paren && close_paren && close_paren > open_paren) {
+            *close_paren = '\0';
+            char *arg = skip_whitespace(open_paren + 1);
+            
+            // Trim trailing spaces in argument
+            char *end = arg + strlen(arg) - 1;
+            while (end > arg && isspace((unsigned char)*end)) *end-- = '\0';
 
-bool set_var_string(const char *name, const char *value) {
-    int idx = find_var(name);
-    if (idx < 0) {
-        for (int i = 0; i < MAX_VARS; i++) {
-            if (!vars[i].in_use) {
-                idx = i;
-                vars[i].in_use = true;
-                strncpy(vars[i].name, name, VAR_NAME_LEN);
-                vars[i].name[VAR_NAME_LEN] = '\0';
-                break;
+            if (*arg == '"') { // String literal
+                char *end_q = strrchr(arg + 1, '"');
+                if (end_q) *end_q = '\0';
+                printf("%s\n", arg + 1);
+            } else { // Variable lookup
+                bool found = false;
+                for (size_t i = 0; i < var_count; i++) {
+                    if (strcmp(vars[i].name, arg) == 0) {
+                        if (vars[i].type == VAR_INT) printf("%d\n", vars[i].ivalue);
+                        else if (vars[i].type == VAR_STRING) printf("%s\n", vars[i].svalue);
+                        else if (vars[i].type == VAR_BOOL) printf("%s\n", vars[i].bvalue ? "true" : "false");
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) fprintf(stderr, "Runtime Error: Variable '%s' not found\n", arg);
             }
         }
-        if (idx < 0) return false;
+        return;
     }
-    vars[idx].type = VAR_STRING;
-    strncpy(vars[idx].svalue, value, sizeof(vars[idx].svalue) - 1);
-    vars[idx].svalue[sizeof(vars[idx].svalue) - 1] = '\0';
-    return true;
-}
 
-bool get_var(const char *name, int *out) {
-    int idx = find_var(name);
-    if (idx < 0) return false;
-    *out = vars[idx].ivalue;
-    return true;
-}
+    // --- Handling Declarations (int, string, bool) ---
+    VarType type;
+    char *name_start = NULL;
 
-bool is_valid_int(const char *str, int *out_value) {
-    if (!str || !*str) return false;
-    
-    char *endptr;
-    long val = strtol(str, &endptr, 10);
-    
-    if (*endptr != '\0' && !isspace((unsigned char)*endptr)) {
-        return false;
+    if (strncmp(stmt, "int ", 4) == 0) { type = VAR_INT; name_start = stmt + 4; }
+    else if (strncmp(stmt, "string ", 7) == 0) { type = VAR_STRING; name_start = stmt + 7; }
+    else if (strncmp(stmt, "bool ", 5) == 0) { type = VAR_BOOL; name_start = stmt + 5; }
+    else return;
+
+    char *eq = strchr(name_start, '=');
+    if (!eq) return;
+
+    *eq = '\0';
+    char *name = skip_whitespace(name_start);
+    // Trim name end
+    char *n_end = name + strlen(name) - 1;
+    while (n_end > name && isspace((unsigned char)*n_end)) *n_end-- = '\0';
+
+    if (isdigit(name[0])) {
+        fprintf(stderr, "Syntax Error: Var name '%s' cannot start with digit\n", name);
+        return;
     }
-    
-    if (out_value) *out_value = (int)val;
-    return true;
-}
 
-bool is_valid_var_name(const char *str) { //check for spaces in var name and \n
-    while (*str) {
-        if (isspace((unsigned char)*str) || *str == '\n') {
-            return false;
+    char *val_str = skip_whitespace(eq + 1);
+    Variable *v = get_or_create_var(name);
+    v->type = type;
+
+    if (type == VAR_INT) {
+        v->ivalue = atoi(val_str);
+    } else if (type == VAR_STRING) {
+        if (*val_str == '"') {
+            char *end_q = strrchr(val_str + 1, '"');
+            if (end_q) *end_q = '\0';
+            if (v->svalue) free(v->svalue);
+            v->svalue = strdup(val_str + 1);
         }
-        str++;
+    } else if (type == VAR_BOOL) {
+        if (strncmp(val_str, "true", 4) == 0) v->bvalue = true;
+        else if (strncmp(val_str, "false", 5) == 0) v->bvalue = false;
+        else fprintf(stderr, "Warning: Invalid bool value '%s'\n", val_str);
     }
-    return true;
 }
 
 int main(void) {
     FILE *file = fopen("test.air", "r");
     if (!file) {
-        perror("Не удалось открыть файл");
+        perror("Error opening file");
         return 1;
     }
 
-    // Определяем размер файла
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
     rewind(file);
 
-    // Читаем файл в строку
     char *buffer = malloc(size + 1);
-    if (!buffer) {
-        fclose(file);
-        return 1;
-    }
-
     fread(buffer, 1, size, file);
     buffer[size] = '\0';
     fclose(file);
 
-    remove_comments(buffer); // remove comments
+    remove_comments(buffer);
 
-    // Разбиение по ;
-    char *token = strtok(buffer, ";");
-
-    
-    // printf("%c\n", token[0]);
-    while (token != NULL) {
-        token = skip_whitespace(token); // clean all spaces and /n
-        if (is_print(token)) { //print function
-            char *print_token = token + 6; // after "print("
-            char *closing = strchr(print_token, ')'); //find ( symbol
-            if (closing) *closing = '\0';
-            print_token = skip_whitespace(print_token);
-            remove_end(print_token);
-
-            if (*print_token == '"') { //if string
-                char *end_quote = strrchr(print_token + 1, '"'); //find string end
-                if (end_quote) *end_quote = '\0';
-                printf("%s\n", print_token + 1);
-            } else { //if var
-                int idx = find_var(print_token);
-                if (idx >= 0) {
-                    if (vars[idx].type == VAR_INT) {
-                        printf("%d\n", vars[idx].ivalue);
-                    } else if (vars[idx].type == VAR_STRING) {
-                        printf("%s\n", vars[idx].svalue);
-                    }
-                } else {
-                    perror("Unknown variable");
-                    return 1;
-                }
-            }
-        } else if (strncmp(token, "int", 3) == 0 && isspace((unsigned char)token[3])) { // if int var
-            char *name_start = skip_whitespace(token + 3);
-            char *eq = strchr(name_start, '=');
-
-            // if first char is digit
-            if (isdigit(name_start[0])) {
-                perror("first char cannot be int");
-                return 1;
-            }
-
-            if (!eq) {
-                token = strtok(NULL, ";");
-                continue;
-            }
-            *eq = '\0';
-            remove_end(name_start);
-
-            if(!is_valid_var_name(name_start)) {
-                perror("vars mustn't have spaces in their names");
-                return 1;
-            }
-
-            char *value_start = skip_whitespace(eq + 1);
-
-            int value = atoi(value_start);
-
-
-            if (!is_valid_int(value_start, &value)) {
-                perror("invalid integer value");
-                return 1;
-            }
-
-            if (!set_var_int(name_start, value)) {
-                perror("Variable storage full");
-                return 1;
-            }
-        } else if (strncmp(token, "string", 6) == 0 && isspace((unsigned char)token[6])) { // if string var
-            char *name_start = skip_whitespace(token + 6);
-            char *eq = strchr(name_start, '=');
-
-            // if first char is digit
-            if (isdigit(name_start[0])) {
-                perror("first char cannot be int");
-                return 1;
-            }
-
-            *eq = '\0';
-            remove_end(name_start);
-
-            if(!is_valid_var_name(name_start)) {
-                perror("vars mustn't have spaces in their names");
-                return 1;
-            }
-
-            char *value_start = skip_whitespace(eq + 1);
-
-            // обрезаем кавычки
-            if (*value_start == '"') {
-                char *end_quote = strrchr(value_start + 1, '"');
-                if (end_quote) {
-                    *end_quote = '\0';
-                } else {
-                    perror("variables names must end with double quotes");
-                    return 1;
-                }
-                value_start++; // point on first symbol inside double quotes
-            } else {
-                perror("string must start with double quotes");
-                return 1;
-            }
-
-            set_var_string(name_start, value_start);
-        } 
-        else {
-
-        }
-        token = strtok(NULL, ";");
+    char *cursor = buffer;
+    char *stmt;
+    while ((stmt = get_next_statement(&cursor)) != NULL) {
+        execute_statement(stmt);
     }
 
     free(buffer);
+    free_all();
     return 0;
 }
