@@ -11,10 +11,12 @@ typedef enum { VAR_INT, VAR_STRING, VAR_BOOL, VAR_FLOAT } VarType;
 typedef struct {
     char *name;
     VarType type;
-    int ivalue;
-    char *svalue;
-    bool bvalue;
-    float fvalue;
+    union {
+        int ivalue;
+        char *svalue;
+        bool bvalue;
+        float fvalue;
+    } data; 
 } Variable;
 
 // Global state for dynamic storage
@@ -41,7 +43,7 @@ Variable* get_or_create_var(const char *name) {
     }
 
     vars[var_count].name = strdup(name);
-    vars[var_count].svalue = NULL;
+    vars[var_count].data.svalue = NULL;
     vars[var_count].type = VAR_INT; // default
     return &vars[var_count++];
 }
@@ -49,8 +51,13 @@ Variable* get_or_create_var(const char *name) {
 // Clean up memory at the end
 void free_all() {
     for (size_t i = 0; i < var_count; i++) {
-        free(vars[i].name);
-        if (vars[i].svalue) free(vars[i].svalue);
+        if (vars[i].name) {
+            free(vars[i].name);
+        }
+
+        if (vars[i].type == VAR_STRING && vars[i].data.svalue != NULL) {
+            free(vars[i].data.svalue);
+        }
     }
     free(vars);
 }
@@ -109,10 +116,10 @@ void execute_statement(char *stmt) {
                 bool found = false;
                 for (size_t i = 0; i < var_count; i++) {
                     if (strcmp(vars[i].name, arg) == 0) {
-                        if (vars[i].type == VAR_INT) printf("%d\n", vars[i].ivalue);
-                        else if (vars[i].type == VAR_STRING) printf("%s\n", vars[i].svalue);
-                        else if (vars[i].type == VAR_BOOL) printf("%s\n", vars[i].bvalue ? "true" : "false");
-                        else if (vars[i].type == VAR_FLOAT) printf("%f\n", vars[i].fvalue);
+                        if (vars[i].type == VAR_INT) printf("%d\n", vars[i].data.ivalue);
+                        else if (vars[i].type == VAR_STRING) printf("%s\n", vars[i].data.svalue);
+                        else if (vars[i].type == VAR_BOOL) printf("%s\n", vars[i].data.bvalue ? "true" : "false");
+                        else if (vars[i].type == VAR_FLOAT) printf("%f\n", vars[i].data.fvalue);
                         found = true;
                         break;
                     }
@@ -152,20 +159,20 @@ void execute_statement(char *stmt) {
     v->type = type;
 
     if (type == VAR_INT) {
-        v->ivalue = atoi(val_str);
+        v->data.ivalue = atoi(val_str);
     } else if (type == VAR_STRING) {
         if (*val_str == '"') {
             char *end_q = strrchr(val_str + 1, '"');
             if (end_q) *end_q = '\0';
-            if (v->svalue) free(v->svalue);
-            v->svalue = strdup(val_str + 1);
+            if (v->data.svalue) free(v->data.svalue);
+            v->data.svalue = strdup(val_str + 1);
         }
     } else if (type == VAR_BOOL) {
-        if (strncmp(val_str, "true", 4) == 0) v->bvalue = true;
-        else if (strncmp(val_str, "false", 5) == 0) v->bvalue = false;
+        if (strncmp(val_str, "true", 4) == 0) v->data.bvalue = true;
+        else if (strncmp(val_str, "false", 5) == 0) v->data.bvalue = false;
         else fprintf(stderr, "Warning: Invalid bool value '%s'\n", val_str);
     } else if (type == VAR_FLOAT) {
-        v->fvalue = (float)atof(val_str);
+        v->data.fvalue = (float)atof(val_str);
     }
 }
 
